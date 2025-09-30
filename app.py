@@ -20,6 +20,13 @@ DEFAULT_DB_DIR = ".ai_store"
 DEFAULT_INDEX_PATH = os.path.join(DEFAULT_DB_DIR, "faiss.index")
 
 
+def is_cloud_env() -> bool:
+	"""Heuristic to detect Streamlit Cloud or similar PaaS."""
+	# Streamlit Cloud typically sets server port in env; localhost runs may as well,
+	# but this combined with lack of TTY is enough for a conservative toggle.
+	return bool(os.getenv("STREAMLIT_SERVER_PORT")) and (os.getenv("CI") or os.getenv("STREAMLIT_RUNTIME") or os.getenv("STREAMLIT_CLOUD") or os.getenv("RENDER") or os.getenv("FLY_REGION"))
+
+
 def get_api_key_from_inputs() -> Optional[str]:
 	# Priority: session input > env var (no secrets file to avoid crashes)
 	api_key = st.session_state.get("gemini_api_key")
@@ -77,12 +84,13 @@ def ui_sidebar() -> Dict:
 		)
 
 		st.divider()
-		enable_research = st.checkbox("Enable web research (slower)", value=DEFAULT_RESEARCH_ENABLED)
+		default_enable_research = False if is_cloud_env() else DEFAULT_RESEARCH_ENABLED
+		enable_research = st.checkbox("Enable web research (slower)", value=default_enable_research)
 		research_k = st.slider("Results per query", min_value=1, max_value=5, value=DEFAULT_RESEARCH_K)
 		crawl_timeout = st.slider("Per-URL timeout (s)", min_value=3, max_value=15, value=DEFAULT_CRAWL_TIMEOUT)
 
 		st.divider()
-		fast_mode = st.checkbox("Fast mode (shorter answers, no research)", value=not DEFAULT_RESEARCH_ENABLED)
+		fast_mode = st.checkbox("Fast mode (shorter answers, no research)", value=True if is_cloud_env() else not DEFAULT_RESEARCH_ENABLED)
 		if fast_mode:
 			enable_research = False
 
@@ -104,7 +112,7 @@ def ui_sidebar() -> Dict:
 			"persist_research": True,
 			"requery_k": 5,
 			"fast_mode": fast_mode,
-			"max_output_tokens": 512 if fast_mode else 1024,
+			"max_output_tokens": (384 if is_cloud_env() else (512 if fast_mode else 1024)),
 		}
 
 
@@ -130,14 +138,17 @@ def build_system_prompt(enable_research: bool) -> str:
 
 def ensure_vector_store(assistant: GeminiAssistant) -> Optional[LocalFaissStore]:
 	try:
-		os.makedirs(DEFAULT_DB_DIR, exist_ok=True)
+		# Use ephemeral /tmp on cloud to avoid slower persistent disk
+		db_dir = "/tmp/.ai_store" if is_cloud_env() else DEFAULT_DB_DIR
+		index_path = os.path.join(db_dir, "faiss.index")
+		os.makedirs(db_dir, exist_ok=True)
 		vs = st.session_state.get("vector_store")
 		if vs is not None:
 			return vs
 		# bootstrap with embedding dimension from a sample embedding
 		probe = assistant.embed_texts(["probe"])
 		dim = len(probe[0]) if probe and probe[0] else 768
-		vs = LocalFaissStore(dim=dim, index_path=DEFAULT_INDEX_PATH)
+		vs = LocalFaissStore(dim=dim, index_path=index_path)
 		st.session_state.vector_store = vs
 		return vs
 	except Exception as _e:
@@ -278,7 +289,7 @@ def main():
 						accumulated += chunk
 						placeholder.markdown(accumulated)
 						# smooth streaming
-						time.sleep(0.002)
+						time.sleep(0.001)
 					# store assistant message with meta for sources
 					st.session_state.messages.append({"role": "assistant", "content": accumulated, "meta": research_meta})
 				except Exception as e:
