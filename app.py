@@ -295,11 +295,17 @@ def main():
 				except Exception as e:
 					placeholder.markdown(f"❌ Error: {str(e)}")
 
-				# Fact-check pass
+				# Fact-check: on cloud, expose as button to avoid extra request; locally, auto-run
 				if accumulated.strip() and assistant:
-					with st.expander("Fact-check report"):
-						fc = fact_check_answer(assistant, accumulated, research_meta)
-						st.markdown(fc or "No report.")
+					if is_cloud_env():
+						with st.expander("Fact-check report"):
+							if st.button("Run fact-check now", use_container_width=True):
+								fc = fact_check_answer(assistant, accumulated, research_meta)
+								st.markdown(fc or "No report.")
+					else:
+						with st.expander("Fact-check report"):
+							fc = fact_check_answer(assistant, accumulated, research_meta)
+							st.markdown(fc or "No report.")
 
 				# Report generation action
 				col1, col2 = st.columns([0.5, 0.5])

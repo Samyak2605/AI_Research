@@ -94,7 +94,8 @@ class GeminiAssistant:
 
 		normalized_supported = set()
 		for name in supported:
-			if any(tag in name for tag in ["exp", "2.5", "vision"]):
+			# Exclude experimental, 2.5 and 2.0 variants, and vision-only models
+			if any(tag in name for tag in ["exp", "2.5", "2.0", "vision"]):
 				continue
 			normalized_supported.add(name)
 			if name.startswith("models/"):
