@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 import requests
 try:
@@ -42,3 +42,22 @@ def web_research(query: str, top_k: int = 4, per_url_timeout_s: int = 10) -> Lis
 		# Fail open with empty results so the app still answers
 		pass
 	return results
+
+
+def format_snippets_for_citation(snippets: List[Dict]) -> str:
+	"""Format research snippets for display and secondary prompts."""
+	lines: List[str] = []
+	for r in snippets:
+		title = r.get("title") or "Source"
+		url = r.get("url") or ""
+		content = (r.get("content") or "").strip()
+		preview = content[:400].replace("\n", " ") if content else ""
+		lines.append(f"- {title} ({url}) :: {preview}")
+	return "\n".join(lines)
+
+
+def select_top_k_snippets(snippets: List[Dict], k: int = 5) -> List[Dict]:
+	"""Simple truncation heuristic to limit snippets for prompts."""
+	if not snippets:
+		return []
+	return snippets[: max(0, k)]

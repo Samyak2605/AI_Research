@@ -34,6 +34,43 @@ class GeminiAssistant:
 		self.max_retries = max(0, int(max_retries))
 		self.model = genai.GenerativeModel(self.model_name)
 
+	def embed_texts(self, texts: List[str], model: str = "text-embedding-004") -> List[List[float]]:
+		"""Return embeddings for a list of texts using Gemini embedding model.
+
+		Falls back gracefully by returning empty lists on error for each text.
+		"""
+		embeddings: List[List[float]] = []
+		for t in texts:
+			try:
+				res = genai.embed_content(model=model, content=t or "")
+				vec = res.get("embedding") if isinstance(res, dict) else getattr(res, "embedding", None)
+				if vec:
+					embeddings.append(list(vec))
+					continue
+			except Exception:
+				pass
+			# ensure positional alignment
+			embeddings.append([])
+		return embeddings
+
+	def generate_answer(
+		self,
+		messages: List[Dict[str, str]],
+		system_prompt: str,
+		context_snippets: Optional[List[str]] = None,
+	) -> str:
+		"""Non-streaming single-call generation that returns full text."""
+		prompt = self._compose_prompt(system_prompt, messages, context_snippets)
+		try:
+			response = self.model.generate_content(
+				prompt,
+				generation_config=self.generation_config,
+			)
+			text = getattr(response, "text", None)
+			return text or ""
+		except Exception as e:
+			return f"Error: {str(e)}"
+
 	def _resolve_model_name(self, requested: str) -> str:
 		"""Resolve to an available non-experimental model that supports generateContent.
 		Prefers 1.5 flash/pro latest models and avoids experimental (exp) and 2.5 variants.
