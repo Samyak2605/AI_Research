@@ -1,0 +1,7 @@
+[theme]
+base = "dark"
+primaryColor = "#60a5fa"         # sky-400
+backgroundColor = "#0b1220"      # dark navy
+secondaryBackgroundColor = "#111827" # near-black slate
+textColor = "#e5e7eb"            # gray-200
+font = "sans serif"
